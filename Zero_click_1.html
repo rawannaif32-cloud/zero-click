@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zero-Click — المكالمة الصامتة (v5)</title>
+<style>
+  :root{
+    --navy:#081428; --teal:#00B4AA; --coral:#FF6347; --gold:#FFC107; --muted:#B4B8C3;
+    --leak:#29ffc6; --leak2:#2F7FEA; --glow:rgba(0,180,170,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--navy);color:#fff;font-family:"Cairo","Segoe UI",Tahoma,sans-serif}
+  button{cursor:pointer;border:none;border-radius:14px;padding:12px 18px;font-size:1rem}
+  .cta{background:var(--teal);color:#fff} .secondary{background:var(--coral)} .gold{background:var(--gold);color:#111}
+
+  .screen{display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+  .active{display:flex}
+  .container{width:min(1150px,94vw);margin:auto}
+  .card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:22px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
+
+  h1{margin:0 0 10px;color:var(--teal);font-size:2.2rem}
+  h2{margin:0 0 10px;font-size:1.7rem}
+  .row{display:flex;gap:22px;flex-wrap:wrap;align-items:center;justify-content:center}
+  .footer{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+
+  /* Appear animations per screen */
+  .appear{animation:fadeIn .5s ease-out, rise .5s ease-out}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes rise{from{transform:translateY(8px)}to{transform:translateY(0)}}
+
+  /* Phone mockup */
+  .phone{ width:min(360px,70vw); height:620px; border-radius:36px; padding:18px; position:relative; overflow:hidden;
+          background:linear-gradient(180deg,#0e2038,#0b1727); border:1px solid rgba(255,255,255,.12); }
+  .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:120px;height:14px;border-radius:9px;background:#202a3a}
+  .caller{margin-top:64px;text-align:center;font-weight:800;color:var(--coral);font-size:1.3rem}
+  .notif{margin:16px auto;width:86%;padding:12px;border-radius:14px;background:rgba(255,255,255,.06);color:#e8e8e8;text-align:center}
+  .ringGlow{animation:ringGlow 1.1s ease-in-out infinite}
+  @keyframes ringGlow{0%{box-shadow:0 0 0 0 var(--glow)}70%{box-shadow:0 0 40px 0 var(--glow)}100%{box-shadow:0 0 0 0 var(--glow)}}
+
+  /* Progress bar */
+  .progress{height:6px;border-radius:6px;background:rgba(255,255,255,.06);overflow:hidden;margin:10px 20px 0}
+  .progress>span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),#5fe6d6)}
+
+  /* Data leak animation (long) */
+  .leak{position:absolute;left:50%;top:55%;width:0;height:0;pointer-events:none}
+  .leak span{position:absolute;left:-10px;top:-10px;width:3px;height:90px;border-radius:3px;
+             background:linear-gradient(to bottom,var(--leak),var(--leak2));opacity:.0;transform:rotate(-18deg) translate3d(0,0,0)}
+  .leak.active span{animation:leakMove 1.6s linear infinite}
+  .leak span:nth-child(2){left:-34px;animation-delay:.12s;height:120px}
+  .leak span:nth-child(3){left:12px; animation-delay:.22s}
+  .leak span:nth-child(4){left:-56px;animation-delay:.30s;height:140px}
+  .leak span:nth-child(5){left:34px; animation-delay:.36s;height:110px}
+  @keyframes leakMove{
+    0%{opacity:.0;transform:rotate(-18deg) translate(-12px, 0)}
+    12%{opacity:.85}
+    100%{opacity:.0;transform:rotate(-18deg) translate(360px,-220px)}
+  }
+
+  /* Crash effect inside phone */
+  .crashFlash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  .crashActive .crashFlash{animation:flash .28s ease-in 1}
+  @keyframes flash{0%{opacity:.0}20%{opacity:.9}100%{opacity:.0}}
+  .crashActive{animation:shake .5s ease-in 1}
+  @keyframes shake{0%,100%{transform:translate(0)}20%{transform:translate(2px,-2px)}40%{transform:translate(-3px,1px)}60%{transform:translate(2px,3px)}80%{transform:translate(-2px,-1px)}}
+  .blackout{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none}
+  .crashActive .blackout{animation:blackOut 1.2s forwards .15s}
+  @keyframes blackOut{to{opacity:.94}}
+
+  /* Hack glitch overlay */
+  .glitchOverlay{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;transition:opacity .25s}
+  .glitchOverlay.show{opacity:1}
+
+  /* Top bar */
+  .topbar{position:fixed;inset-inline:0;top:0;height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:linear-gradient(180deg,rgba(0,0,0,.45),rgba(0,0,0,0));z-index:9}
+  .logo{font-weight:700;color:var(--muted)}
+  .linkbtn{background:transparent;color:#cbe;border:1px solid rgba(255,255,255,.18);padding:6px 10px;border-radius:10px}
+
+  /* ===== ROBOT (Animated SVG) ===== */
+  .bot{width:230px}
+  .float{animation:float 3.6s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  .blink ellipse{animation:blink 3.2s infinite}
+  @keyframes blink{0%,92%,100%{ry:6}94%{ry:1}}
+  .antenna{transform-origin:center;animation:antenna 1.8s ease-in-out infinite}
+  @keyframes antenna{0%,100%{opacity:.5}50%{opacity:1}}
+  .ring{transform-origin:100px 160px;animation:ring 2.4s linear infinite}
+  @keyframes ring{to{transform:rotate(360deg)}}
+  .shieldPulse{opacity:.75;animation:shield 2.2s ease-in-out infinite}
+  @keyframes shield{0%,100%{opacity:.55}50%{opacity:1}}
+
+  .side{display:flex; gap:24px; align-items:center; justify-content:center; flex-wrap:wrap}
+  .side .phone{margin-inline-start:6px}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="logo">Zero-Click Booth</div>
+  <div>
+    <button class="linkbtn" onclick="go('home')">الرئيسية</button>
+    <button class="linkbtn" onclick="restart()">إعادة</button>
+  </div>
+</div>
+
+<!-- Home -->
+<section id="home" class="screen active" aria-label="home">
+  <div class="container card center appear">
+    <h1>Zero-Click — المكالمة الصامتة</h1>
+    <div class="row" style="margin-top:10px">
+      <!-- Neutral Bot -->
+      <svg class="bot float" viewBox="0 0 200 220" aria-hidden="true">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0e223b"/><stop offset="100%" stop-color="#142e4a"/>
+          </linearGradient>
+        </defs>
+        <rect x="40" y="40" rx="18" ry="18" width="120" height="90" fill="url(#g1)" stroke="#3a5b7c"/>
+        <!-- antenna -->
+        <circle class="antenna" cx="100" cy="32" r="4" fill="#00B4AA"/>
+        <line x1="100" y1="32" x2="100" y2="40" stroke="#00B4AA" stroke-width="2" class="antenna"/>
+        <!-- eyes -->
+        <g class="blink">
+          <ellipse cx="90" cy="80" rx="7" ry="6" fill="#1bdad0"/>
+          <ellipse cx="130" cy="80" rx="7" ry="6" fill="#1bdad0"/>
+        </g>
+        <rect x="60" y="130" rx="20" width="80" height="26" fill="#102132" stroke="#284860"/>
+        <!-- soft ring -->
+        <circle class="ring" cx="100" cy="160" r="18" fill="none" stroke="#00B4AA" stroke-opacity=".35"/>
+      </svg>
+    </div>
+    <div class="footer">
+      <button class="cta" onclick="startExperience()">ابدأ التجربة</button>
+      <button class="secondary" onclick="goQuizFresh()">الأسئلة</button>
+    </div>
+  </div>
+</section>
+
+<!-- Call -->
+<section id="call" class="screen" aria-label="call">
+  <div class="container card appear">
+    <h2 class="center">مكالمة واردة</h2>
+    <div class="side">
+      <!-- Scanning Bot -->
+      <svg class="bot float" viewBox="0 0 200 220" aria-hidden="true">
+        <defs>
+          <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0e223b"/><stop offset="100%" stop-color="#1c3553"/>
+          </linearGradient>
+        </defs>
+        <rect x="40" y="40" rx="18" ry="18" width="120" height="90" fill="url(#g2)" stroke="#3a5b7c"/>
+        <circle class="antenna" cx="100" cy="32" r="4" fill="#29ffc6"/>
+        <line x1="100" y1="32" x2="100" y2="40" stroke="#29ffc6" stroke-width="2" class="antenna"/>
+        <g class="blink">
+          <ellipse cx="90" cy="80" rx="7" ry="6" fill="#29ffc6"/>
+          <ellipse cx="130" cy="80" rx="7" ry="6" fill="#29ffc6"/>
+        </g>
+        <rect x="60" y="130" rx="20" width="80" height="26" fill="#102132" stroke="#284860"/>
+      </svg>
+
+      <div class="phone ringGlow" id="phone">
+        <div class="notch"></div>
+        <div class="caller">+880 12 3456 7890</div>
+        <div class="notif">ملف وسائط وارد — لم يُفتح</div>
+        <div class="progress"><span id="progressBar"></span></div>
+        <!-- Data leak long -->
+        <div class="leak" id="leak"><span></span><span></span><span></span><span></span><span></span></div>
+        <!-- Crash layers -->
+        <div class="crashFlash"></div>
+        <div class="blackout"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="gold" onclick="goHackNow()">تجاوز</button>
+    </div>
+  </div>
+</section>
+
+<!-- Hack -->
+<section id="hack" class="screen" aria-label="hack">
+  <div class="container card center appear" style="position:relative">
+    <div id="hackGlitch" class="glitchOverlay"></div>
+    <h2 style="margin-bottom:8px">⚠️ تم استغلال الثغرة</h2>
+    <!-- Hacked Bot -->
+    <div class="row" style="margin-top:4px">
+      <svg class="bot float" viewBox="0 0 200 220" aria-hidden="true">
+        <defs>
+          <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#1a0f12"/><stop offset="100%" stop-color="#2a1319"/>
+          </linearGradient>
+        </defs>
+        <rect x="40" y="40" rx="18" ry="18" width="120" height="90" fill="url(#g3)" stroke="#8e3942"/>
+        <circle class="antenna" cx="100" cy="32" r="4" fill="#FF6347"/>
+        <line x1="100" y1="32" x2="100" y2="40" stroke="#FF6347" stroke-width="2" class="antenna"/>
+        <g class="blink">
+          <ellipse cx="90" cy="80" rx="7" ry="6" fill="#ff5a5a"/>
+          <ellipse cx="130" cy="80" rx="7" ry="6" fill="#ff5a5a"/>
+        </g>
+        <rect x="60" y="130" rx="20" width="80" height="26" fill="#2a0b12" stroke="#8e3942"/>
+      </svg>
+    </div>
+    <div class="footer">
+      <button class="cta" onclick="goQuizFresh()">اذهب للأسئلة</button>
+      <button class="secondary" onclick="restart()">إعادة</button>
+    </div>
+  </div>
+</section>
+
+<!-- Protect -->
+<section id="protect" class="screen" aria-label="protect">
+  <div class="container card appear">
+    <h2 class="center">كيف تحمي نفسك؟</h2>
+    <div class="side">
+      <!-- Protected Bot -->
+      <svg class="bot float" viewBox="0 0 200 220" aria-hidden="true">
+        <defs>
+          <linearGradient id="g4" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0e223b"/><stop offset="100%" stop-color="#1a3a4f"/>
+          </linearGradient>
+          <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#00B4AA"/><stop offset="100%" stop-color="#29ffc6"/>
+          </linearGradient>
+        </defs>
+        <rect x="40" y="40" rx="18" ry="18" width="120" height="90" fill="url(#g4)" stroke="#3a5b7c"/>
+        <circle class="antenna" cx="100" cy="32" r="4" fill="#29ffc6"/>
+        <line x1="100" y1="32" x2="100" y2="40" stroke="#29ffc6" stroke-width="2" class="antenna"/>
+        <g class="blink">
+          <ellipse cx="90" cy="80" rx="7" ry="6" fill="#1bdad0"/>
+          <ellipse cx="130" cy="80" rx="7" ry="6" fill="#1bdad0"/>
+        </g>
+        <rect x="60" y="130" rx="20" width="80" height="26" fill="#102132" stroke="#284860"/>
+        <!-- Shield -->
+        <path class="shieldPulse" d="M100,100 q30,10 30,40 q0,25 -30,35 q-30,-10 -30,-35 q0,-30 30,-40z" fill="url(#shield)" opacity=".75"/>
+      </svg>
+
+      <ul style="line-height:1.9; max-width:540px; margin:0">
+        <li>حدّث نظام التشغيل والتطبيقات فورًا.</li>
+        <li>لا تعِد الاتصال بالأرقام الدولية المجهولة.</li>
+        <li>فعّل التحقق بخطوتين (2FA) باستخدام تطبيق مصادقة.</li>
+        <li>قلّل أذونات التطبيقات (كاميرا/مايك/ملفات) قدر الإمكان.</li>
+      </ul>
+    </div>
+    <div class="footer">
+      <button class="gold" onclick="restart()">عودة</button>
+      <button class="cta" onclick="startExperience()">أعد المحاكاة</button>
+    </div>
+  </div>
+</section>
+
+<!-- Quiz -->
+<section id="quiz" class="screen" aria-label="quiz">
+  <div class="container card appear">
+    <h2 class="center">هل أنت ذكي وقادر على حماية نفسك؟</h2>
+    <!-- Thinking Bot -->
+    <div class="row">
+      <svg class="bot float" viewBox="0 0 200 220" aria-hidden="true">
+        <defs>
+          <linearGradient id="g5" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0e223b"/><stop offset="100%" stop-color="#17324a"/>
+          </linearGradient>
+        </defs>
+        <rect x="40" y="40" rx="18" ry="18" width="120" height="90" fill="url(#g5)" stroke="#3a5b7c"/>
+        <circle class="antenna" cx="100" cy="32" r="4" fill="#29ffc6"/>
+        <line x1="100" y1="32" x2="100" y2="40" stroke="#29ffc6" stroke-width="2" class="antenna"/>
+        <g class="blink">
+          <ellipse cx="90" cy="80" rx="7" ry="6" fill="#1bdad0"/>
+          <ellipse cx="130" cy="80" rx="7" ry="6" fill="#1bdad0"/>
+        </g>
+        <rect x="60" y="130" rx="20" width="80" height="26" fill="#102132" stroke="#284860"/>
+        <!-- thinking ring -->
+        <circle class="ring" cx="100" cy="160" r="18" fill="none" stroke="#29ffc6" stroke-opacity=".35"/>
+      </svg>
+    </div>
+
+    <div id="q1" class="appear" style="margin-top:12px">
+      <div>1) هل تحدّث نظامك وتطبيقاتك فور صدور التحديث الأمني؟</div>
+      <div class="footer"><button class="cta" onclick="quizAnswer(0)">نعم</button><button class="secondary" onclick="quizAnswer(1)">لا</button></div>
+    </div>
+    <div id="q2" class="appear" style="display:none;margin-top:12px">
+      <div>2) هل تستخدم تطبيق مصادقة (Authenticator) بدلاً من رسائل SMS؟</div>
+      <div class="footer"><button class="cta" onclick="quizAnswer(0)">نعم</button><button class="secondary" onclick="quizAnswer(1)">لا</button></div>
+    </div>
+    <div id="q3" class="appear" style="display:none;margin-top:12px">
+      <div>3) هل تقلّل أذونات التطبيقات (كاميرا/مايك/ملفات) قدر الإمكان؟</div>
+      <div class="footer"><button class="cta" onclick="quizAnswer(0)">نعم</button><button class="secondary" onclick="quizAnswer(1)">لا</button></div>
+    </div>
+
+    <div id="res" class="appear" style="display:none;margin-top:16px;text-align:center">
+      <div id="resBadge" style="font-weight:800;padding:12px 14px;border-radius:12px;display:inline-block"></div>
+      <div class="footer" style="margin-top:12px">
+        <button class="gold" onclick="restart()">عودة</button>
+        <button class="cta" onclick="startExperience()">أعد المحاكاة</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+/* ======= حالة عامة ======= */
+let audioCtx=null, ringTimer=null, afterHackTimer=null;
+let ringDuration = 4.5;     // مدة الرنّة (ث)
+let ringVolume   = 0.18;    // مستوى صوت الرنّة
+let glitchVolume = 0.22;    // مستوى الغليتش/الكراش
+
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const el = document.getElementById(id); el.classList.add('active');
+  // إضافة تأثير ظهور للشاشة الحالية
+  const card = el.querySelector('.card'); if(card){ card.classList.remove('appear'); void card.offsetWidth; card.classList.add('appear'); }
+}
+
+/* ======= محاكاة ======= */
+function startExperience(){
+  resetQuiz();
+  if(!audioCtx) initAudio();
+  resetProgressBar(); stopAudio();
+  show('call');
+
+  playIOSLikeRingtone(ringDuration);
+  animateProgress(ringDuration);
+
+  // تسريب مبكر وطويل
+  setTimeout(startLeak, 600);
+
+  ringTimer = setTimeout(goHackNow, Math.round(ringDuration*1000));
+}
+
+function restart(){
+  clearTimeout(ringTimer); clearTimeout(afterHackTimer);
+  stopAudio(); resetProgressBar(); stopLeak(); clearCrash(); resetQuiz();
+  show('home');
+}
+
+function goHackNow(){
+  clearTimeout(ringTimer); stopAudio();
+  doCrash();
+  playGlitchSound();
+  show('hack');
+  const hz = document.getElementById('hackGlitch');
+  hz.style.background =
+    "repeating-linear-gradient(0deg, transparent 0 6%, rgba(47,127,234,.12) 6% 7%), linear-gradient(145deg, rgba(138,75,255,.12), rgba(255,255,255,.02))";
+  hz.classList.add('show');
+  afterHackTimer = setTimeout(()=>{ hz.classList.remove('show'); goQuizFresh(); }, 2200);
+}
+
+function go(id){
+  clearTimeout(ringTimer); clearTimeout(afterHackTimer);
+  stopAudio(); show(id);
+}
+
+/* ======= صوت/أوديو ======= */
+function initAudio(){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ audioCtx=null; } }
+function stopAudio(){ if(!audioCtx) return; try{ audioCtx.close(); }catch(e){} audioCtx=null; }
+
+/* رنّة iOS-Style (مولّدة برمجياً) */
+function playIOSLikeRingtone(seconds=3){
+  if(!audioCtx) initAudio(); if(!audioCtx) return;
+  const ctx = audioCtx;
+  const master = ctx.createGain(); master.gain.value = ringVolume; master.connect(ctx.destination);
+  const motif = [659.25, 554.37, 440.00]; // E5, C#5, A4
+  let t = ctx.currentTime, end = t + seconds;
+  while (t < end){
+    for(let i=0;i<motif.length;i++){
+      const o = ctx.createOscillator(); o.type='triangle'; o.frequency.value = motif[i];
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.7,  t+0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.26);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t+0.28);
+      t += 0.30; if(t>=end) break;
+    }
+  }
+}
+
+/* Glitch/Crash صوتي قصير */
+function playGlitchSound(){
+  if(!audioCtx) initAudio(); if(!audioCtx) return;
+  const ctx = audioCtx;
+  const out = ctx.createGain(); out.gain.value = glitchVolume; out.connect(ctx.destination);
+  const dur=0.35, len=ctx.sampleRate*dur;
+  const buf=ctx.createBuffer(1,len,ctx.sampleRate); const data=buf.getChannelData(0);
+  for(let i=0;i<len;i++){ data[i]=(Math.random()*2-1)*(1-i/len); }
+  const noise=ctx.createBufferSource(); noise.buffer=buf;
+  const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1200; bp.Q.value=7;
+  noise.connect(bp); bp.connect(out); noise.start(); noise.stop(ctx.currentTime+dur);
+}
+
+/* ======= Progress bar ======= */
+function animateProgress(duration){
+  const bar = document.getElementById('progressBar');
+  bar.style.transition='none'; bar.style.width='0%'; void bar.offsetWidth;
+  bar.style.transition=`width ${duration}s linear`; bar.style.width='100%';
+}
+function resetProgressBar(){
+  const bar=document.getElementById('progressBar'); bar.style.transition='none'; bar.style.width='0%';
+}
+
+/* ======= Leak (طويل) ======= */
+function startLeak(){ document.getElementById('leak').classList.add('active'); }
+function stopLeak(){ document.getElementById('leak').classList.remove('active'); }
+
+/* ======= Crash ======= */
+function doCrash(){
+  const phone = document.getElementById('phone');
+  phone.classList.add('crashActive');
+  setTimeout(stopLeak, 500);
+}
+function clearCrash(){ document.getElementById('phone').classList.remove('crashActive'); }
+
+/* ======= Quiz (يعاد كل مرة) ======= */
+let q=0, pts=0;
+function resetQuiz(){
+  q=0; pts=0;
+  ['q1','q2','q3'].forEach((id,i)=>{
+    const el=document.getElementById(id); el.style.display = (i===0?'block':'none');
+  });
+  document.getElementById('res').style.display='none';
+  const b=document.getElementById('resBadge'); b.textContent=''; b.removeAttribute('style');
+}
+function goQuizFresh(){ resetQuiz(); show('quiz'); }
+function quizAnswer(val){
+  pts += (val===1?1:0);
+  q++;
+  if(q===1){ document.getElementById('q1').style.display='none'; document.getElementById('q2').style.display='block'; }
+  else if(q===2){ document.getElementById('q2').style.display='none'; document.getElementById('q3').style.display='block'; }
+  else { document.getElementById('q3').style.display='none'; showResult(); }
+}
+function showResult(){
+  const res = document.getElementById('res'); res.style.display='block';
+  const b = document.getElementById('resBadge');
+  if(pts<=1){ b.style.background='#0f5132'; b.style.color='#d1fae5'; b.textContent='ذكي ومحمي ✅'; }
+  else if(pts===2){ b.style.background='#664d03'; b.style.color='#fff3cd'; b.textContent='متوسط الذكاء الأمني ⚠️'; }
+  else { b.style.background='#58151c'; b.style.color='#f8d7da'; b.textContent='تحتاج تقوية ❌'; }
+}
+
+/* اختصارات */
+document.addEventListener('keydown',(e)=>{
+  const k=e.key.toLowerCase();
+  if(k===' '||k==='space'){ e.preventDefault(); startExperience(); }
+  if(k==='r'){ restart(); }
+});
+
+show('home');
+</script>
+</body>
+</html>
